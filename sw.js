@@ -1,5 +1,5 @@
-const CACHE_NAME = 'wild-shaale-recce-v1';
 
+const CACHE_NAME = 'wild-shaale-recce-v2';
 const APP_FILES = [
   './',
   './index.html',
@@ -16,40 +16,43 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
+    caches.keys()
+      .then(keys => Promise.all(
         keys
           .filter(key => key !== CACHE_NAME)
           .map(key => caches.delete(key))
-      )
-    ).then(() => self.clients.claim())
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  const request = event.request;
 
-  const url = new URL(event.request.url);
+  if (request.method !== 'GET') return;
 
-  // Do not cache Apps Script requests or Google Sheets data.
-  if (url.hostname.includes('google.com') ||
-      url.hostname.includes('googleusercontent.com')) {
-    return;
-  }
+  const url = new URL(request.url);
+
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-
-      return fetch(event.request).then(response => {
+    fetch(request)
+      .then(response => {
         if (response && response.ok) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache =>
-            cache.put(event.request, copy)
-          );
+          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
         }
         return response;
-      });
-    })
+      })
+      .catch(() => caches.match(request).then(cached => {
+        if (cached) return cached;
+        if (request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+        return new Response('Offline and no cached copy is available.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }))
   );
 });
