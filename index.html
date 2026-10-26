@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f5d42">
+  <link rel="manifest" href="manifest.json">
+  <title>Wild Shaale — School Recce</title>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f7f4;
+      color: #17231c;
+    }
+    header {
+      background: #1f5d42;
+      color: white;
+      padding: 18px;
+    }
+    header h1 { margin: 0 0 5px; font-size: 22px; }
+    header p { margin: 0; font-size: 14px; }
+    main { max-width: 850px; margin: auto; padding: 12px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px;
+      background: #1f5d42;
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .tabs button { flex: 1; }
+    button.secondary { background: #e3ede6; color: #1f5d42; }
+    .active { outline: 3px solid #a7c9b2; }
+    .card {
+      background: white;
+      border: 1px solid #dce5de;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 12px;
+    }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    h3 { font-size: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .full { grid-column: 1 / -1; }
+    label { font-size: 14px; font-weight: bold; }
+    input, select, textarea {
+      width: 100%;
+      padding: 11px;
+      min-height: 44px;
+      border: 1px solid #c8d4cb;
+      border-radius: 8px;
+      background: white;
+      font: inherit;
+    }
+    textarea { min-height: 90px; }
+    .hint, .small { font-size: 13px; color: #617066; line-height: 1.5; }
+    .status {
+      background: #edf3ee;
+      border-radius: 8px;
+      padding: 11px;
+      margin: 10px 0;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }
+    .error { background: #fff0ef; color: #8c2424; }
+    .ok { background: #e8f6eb; color: #1d6332; }
+    .hidden { display: none !important; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .record { border: 1px solid #dce5de; border-radius: 8px; padding: 12px; margin: 9px 0; }
+    .pill { font-size: 12px; margin-top: 7px; display: inline-block; }
+    .footer { text-align: center; color: #617066; font-size: 12px; padding: 15px; }
+    @media (max-width: 560px) {
+      .grid { grid-template-columns: 1fr; }
+      .full { grid-column: auto; }
+      main { padding: 9px; }
+      .card { padding: 12px; }
+      .tabs button { font-size: 13px; padding: 10px 5px; }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>Wild Shaale — School Recce</h1>
+  <p>Offline-first school visit data collection</p>
+</header>
+
+<main>
+  <nav class="tabs">
+    <button id="tabRecce" class="active" onclick="showView('recce')">New Recce</button>
+    <button id="tabSetup" onclick="showView('setup')">Setup</button>
+    <button id="tabQueue" onclick="showView('queue')">Saved Entries</button>
+    <button id="tabDashboard" onclick="showView('dashboard')">Dashboard</button>
+  </nav>
+
+  <div id="globalStatus" class="status">
+    Open Setup while online to connect your destination Google Sheet.
+  </div>
+
+  <!-- SETUP -->
+  <section id="viewSetup" class="hidden">
+    <div class="card">
+      <h2>Pre-Recce Setup</h2>
+      <p class="small">
+        Enter the Apps Script Web App URL and the Google Sheet where recce records
+        should be saved. Run setup before travelling.
+      </p>
+
+      <div class="grid">
+        <div class="field full">
+          <label for="scriptUrl">Apps Script Web App URL</label>
+          <input id="scriptUrl" type="url"
+            placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+
+        <div class="field full">
+          <label for="sheetUrl">Destination Google Sheet URL or ID</label>
+          <input id="sheetUrl" type="text"
+            placeholder="Paste the Google Sheet link">
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button onclick="runSetup()">Save Destination & Prepare Sheet</button>
+        <button class="secondary" onclick="refreshConfig()">Download / Refresh Configuration</button>
+      </div>
+      <div id="setupResult" class="status hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Configure your form</h2>
+      <p class="small">
+        After preparing the sheet, open it and add your location and question
+        details to these tabs:
+      </p>
+      <ul>
+        <li><b>Location Master:</b> Park Name, District Name, Taluka Name, Village Name</li>
+        <li><b>Form Configuration:</b> Field ID, Field Label, Type, Required, Options, Section, Active</li>
+        <li><b>Educators:</b> Educator Name, Active</li>
+        <li><b>Sync Log:</b> Sync status records</li>
+      </ul>
+      <p class="small">
+        After editing the configuration tabs, return here and select
+        “Download / Refresh Configuration”. Do this while online.
+      </p>
+      <button class="secondary" onclick="openSheet()">Open Destination Sheet</button>
+    </div>
+  </section>
+
+  <!-- NEW RECce -->
+  <section id="viewRecce">
+    <form id="recceForm" onsubmit="saveRecce(event)">
+      <div class="card">
+        <h2>1. School Location</h2>
+
+        <div class="grid">
+          <div class="field">
+            <label for="park">Park Name *</label>
+            <select id="park" required>
+              <option value="">Select park</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="district">District Name *</label>
+            <select id="district" required disabled>
+              <option value="">Select district</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="taluka">Taluka Name *</label>
+            <select id="taluka" required disabled>
+              <option value="">Select taluka</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="village">Village Name *</label>
+            <select id="village" required disabled>
+              <option value="">Select village</option>
+            </select>
+          </div>
+
+          <div class="field full">
+            <label for="school_name">School Name *</label>
+            <input id="school_name" required
+              placeholder="Type the school name">
+          </div>
+        </div>
+
+        <p class="hint">
+          Enter the school name for every new recce. The app does not search
+          for or select an existing school.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>2. GPS Location</h2>
+        <button type="button" onclick="captureGps()">Capture Current Location</button>
+        <p id="gpsAccuracy" class="small">GPS not captured</p>
+
+        <div class="grid">
+          <div class="field">
+            <label for="lat">Latitude</label>
+            <input id="lat" type="number" step="any" placeholder="GPS latitude">
+          </div>
+
+          <div class="field">
+            <label for="lng">Longitude</label>
+            <input id="lng" type="number" step="any" placeholder="GPS longitude">
+          </div>
+        </div>
+      </div>
+
+      <div id="dynamicFields"></div>
+
+      <div class="card">
+        <h2>3. Review and Save</h2>
+        <p class="small">
+          Your entry is saved on this device first. You can sync it to the
+          destination spreadsheet when you have internet access.
+        </p>
+        <div class="button-row">
+          <button type="submit">Save Recce on This Device</button>
+          <button type="button" class="secondary" onclick="resetRecceForm()">Clear Form</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="viewDashboard" class="hidden">
+    <div class="card">
+      <h2>Recce Dashboard</h2>
+      <button onclick="refreshDashboard()">Refresh Dashboard</button>
+      <p class="small">Shows records that have synced to the destination spreadsheet.</p>
+      <div id="dashboardContent" class="status">
+        Refresh while online to load dashboard information.
+      </div>
+    </div>
+  </section>
+
+  <!-- SAVED ENTRIES -->
+  <section id="viewQueue" class="hidden">
+    <div class="card">
+      <h2>Saved Entries</h2>
+      <button onclick="syncEntries()">Sync Pending Entries</button>
+      <p class="small">
+        Records remain on this device until the server confirms the sync.
+      </p>
+      <div id="queueList"></div>
+      <div class="button-row">
+        <button class="secondary" onclick="exportPending()">Export Saved Entries (JSON)</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    Wild Shaale School Recce App · Save entries locally before leaving the field.
+  </div>
+</main>
+
+<form id="postForm" method="post" target="syncFrame" class="hidden">
+  <input name="payload" id="postPayload">
+</form>
+<iframe name="syncFrame" id="syncFrame" class="hidden" title="Sync response"></iframe>
+
+<script>
+const DB_NAME = 'WildShaaleRecceDB';
+const DB_VERSION = 1;
+const STORE = 'entries';
+
+let db;
+let config = { locations: [], fields: [], educators: [] };
+let destinationSheet = '';
+let backendUrl = '';
+
+const $ = id => document.getElementById(id);
+
+function showView(view) {
+  ['recce', 'setup', 'queue', 'dashboard'].forEach(v => {
+    $('view' + v[0].toUpperCase() + v.slice(1)).classList.toggle('hidden', v !== view);
+    $('tab' + v[0].toUpperCase() + v.slice(1)).classList.toggle('active', v === view);
+  });
+
+  if (view === 'queue') renderQueue();
+  if (view === 'dashboard') refreshDashboard();
+}
+
+function setStatus(message, type = '') {
+  const el = $('globalStatus');
+  el.textContent = message;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+function setSetupStatus(message, type = '') {
+  const el = $('setupResult');
+  el.textContent = message;
+  el.className = 'status' + (type ? ' ' + type : '');
+  el.classList.remove('hidden');
+}
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) {
+        req.result.createObjectStore(STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => { db = req.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbReady() {
+  if (!db) await openDb();
+}
+
+function allEntries() {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function putEntry(entry) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(entry);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function updateEntry(entry) {
+  return putEntry(entry);
+}
+
+function loadSavedSettings() {
+  backendUrl = localStorage.getItem('ws_backend_url') || '';
+  destinationSheet = localStorage.getItem('ws_sheet_url') || '';
+
+  $('scriptUrl').value = backendUrl;
+  $('sheetUrl').value = destinationSheet;
+
+  const saved = localStorage.getItem('ws_config');
+  if (saved) {
+    try {
+      config = JSON.parse(saved);
+      renderLocationFields();
+      renderDynamicFields();
+    } catch (e) {
+      console.warn('Could not load saved configuration', e);
+    }
+  }
+}
+
+function normalizeSheetId(value) {
+  const match = String(value || '').match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : String(value || '').trim();
+}
+
+function jsonp(action, extra = {}) {
+  return new Promise((resolve, reject) => {
+    if (!backendUrl) {
+      reject(new Error('Enter the Apps Script Web App URL first.'));
+      return;
+    }
+
+    const callbackName = 'ws_cb_' + Date.now() + '_' +
+      Math.floor(Math.random() * 100000);
+
+    const url = new URL(backendUrl);
+    url.searchParams.set('action', action);
+    url.searchParams.set('callback', callbackName);
+
+    if (destinationSheet) {
+      url.searchParams.set('sheetId', normalizeSheetId(destinationSheet));
+    }
+
+    Object.entries(extra).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+
+    const script = document.createElement('script');
+    let finished = false;
+
+    const timer = setTimeout(() => {
+      finish(new Error('Request timed out. Check internet, URL and deployment access.'));
+    }, 20000);
+
+    function finish(error, data) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+      if (error) reject(error);
+      else resolve(data);
+    }
+
+    window[callbackName] = data => finish(null, data);
+    script.onerror = () => finish(new Error(
+      'Could not reach Apps Script. Check the Web App URL and access settings.'
+    ));
+    script.src = url.toString();
+    document.body.appendChild(script);
+  });
+}
+
+async function runSetup() {
+  backendUrl = $('scriptUrl').value.trim();
+  destinationSheet = $('sheetUrl').value.trim();
+
+  if (!backendUrl || !destinationSheet) {
+    setSetupStatus('Enter both the Apps Script URL and destination Sheet link.', 'error');
+    return;
+  }
+
+  localStorage.setItem('ws_backend_url', backendUrl);
+  localStorage.setItem('ws_sheet_url', destinationSheet);
+  setSetupStatus('Preparing destination spreadsheet…');
+
+  try {
+    const result = await jsonp('setup');
+    if (!result.ok) throw new Error(result.error || result.message || 'Setup failed');
+
+    setSetupStatus(
+      'Setup complete for "' + result.spreadsheetName +
+      '". Configuration tabs: ' + (result.tabsCreatedOrChecked || []).join(', '),
+      'ok'
+    );
+
+    await refreshConfig();
+  } catch (error) {
+    setSetupStatus(error.message, 'error');
+  }
+}
+
+async function refreshConfig() {
+  backendUrl = $('scriptUrl').value.trim() || backendUrl;
+  destinationSheet = $('sheetUrl').value.trim() || destinationSheet;
+
+  if (!backendUrl || !destinationSheet) {
+    setSetupStatus('Enter the Apps Script URL and destination Sheet link first.', 'error');
+    return;
+  }
+
+  localStorage.setItem('ws_backend_url', backendUrl);
+  localStorage.setItem('ws_sheet_url', destinationSheet);
+  setSetupStatus('Downloading configuration…');
+
+  try {
+    const result = await jsonp('config');
+
+    if (result.needsSetup) {
+      setSetupStatus('Run Save Destination & Prepare Sheet first.', 'error');
+      return;
+    }
+    if (!result.ok) throw new Error(result.error || 'Could not load configuration');
+
+    config = result;
+    localStorage.setItem('ws_config', JSON.stringify(config));
+    renderLocationFields();
+    renderDynamicFields();
+
+    setSetupStatus(
+      'Configuration downloaded: ' + config.locations.length +
+      ' location combinations and ' + config.fields.length + ' active fields.',
+      'ok'
+    );
+    setStatus('Configuration ready for recce.', 'ok');
+  } catch (error) {
+    setSetupStatus(error.message, 'error');
+  }
+}
+
+function openSheet() {
+  const id = normalizeSheetId($('sheetUrl').value || destinationSheet);
+  if (id && /^[a-zA-Z0-9-_]{20,}$/.test(id)) {
+    window.open('https://docs.google.com/spreadsheets/d/' + id + '/edit', '_blank');
+  } else {
+    alert('Enter a valid Google Sheet link first.');
+  }
+}
+
+function optionsFor(select, values, placeholder) {
+  select.innerHTML = '';
+
+  const first = document.createElement('option');
+  first.value = '';
+  first.textContent = placeholder;
+  select.appendChild(first);
+
+  [...new Set(values.filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+    .forEach(value => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    });
+}
+
+function renderLocationFields() {
+  const locations = config.locations || [];
+
+  optionsFor($('park'), locations.map(x => x.park), 'Select park');
+  optionsFor($('district'), [], 'Select district');
+  optionsFor($('taluka'), [], 'Select taluka');
+  optionsFor($('village'), [], 'Select village');
+
+  $('district').disabled = true;
+  $('taluka').disabled = true;
+  $('village').disabled = true;
+}
+
+$('park').addEventListener('change', () => {
+  const park = $('park').value;
+  optionsFor($('district'),
+    config.locations.filter(x => x.park === park).map(x => x.district),
+    'Select district');
+  optionsFor($('taluka'), [], 'Select taluka');
+  optionsFor($('village'), [], 'Select village');
+
+  $('district').disabled = !park;
+  $('taluka').disabled = true;
+  $('village').disabled = true;
+});
+
+$('district').addEventListener('change', () => {
+  const park = $('park').value;
+  const district = $('district').value;
+
+  optionsFor($('taluka'),
+    config.locations.filter(x => x.park === park && x.district === district)
+      .map(x => x.taluka),
+    'Select taluka');
+  optionsFor($('village'), [], 'Select village');
+
+  $('taluka').disabled = !district;
+  $('village').disabled = true;
+});
+
+$('taluka').addEventListener('change', () => {
+  const park = $('park').value;
+  const district = $('district').value;
+  const taluka = $('taluka').value;
+
+  optionsFor($('village'),
+    config.locations.filter(x =>
+      x.park === park && x.district === district && x.taluka === taluka
+    ).map(x => x.village),
+    'Select village');
+
+  $('village').disabled = !taluka;
+});
+
+function renderDynamicFields() {
+  const host = $('dynamicFields');
+  host.innerHTML = '';
+
+  const excluded = [
+    'school_name', 'park', 'district', 'taluka', 'village',
+    'lat', 'lng', 'total'
+  ];
+
+  const fields = (config.fields || []).filter(f =>
+    f.active && !excluded.includes(f.id)
+  );
+
+  const grouped = {};
+  fields.forEach(field => {
+    const section = field.section || 'Additional questions';
+    if (!grouped[section]) grouped[section] = [];
+    grouped[section].push(field);
+  });
+
+  Object.entries(grouped).forEach(([section, items]) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const heading = document.createElement('h2');
+    heading.textContent = section;
+    card.appendChild(heading);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+
+    items.forEach(field => {
+      const wrap = document.createElement('div');
+      wrap.className = 'field' +
+        (['textarea', 'longtext'].includes(field.type) ? ' full' : '');
+
+      const label = document.createElement('label');
+      label.htmlFor = 'f_' + field.id;
+      label.textContent = field.label + (field.required ? ' *' : '');
+      wrap.appendChild(label);
+
+      let input;
+
+      if (field.id === 'educator' && config.educators && config.educators.length) {
+        input = document.createElement('select');
+        addOption(input, '', 'Select educator');
+        config.educators.forEach(name => addOption(input, name, name));
+      } else if (['select', 'dropdown', 'yesno'].includes(field.type)) {
+        input = document.createElement('select');
+        addOption(input, '', 'Select an option');
+
+        const choices = field.options && field.options.length
+          ? field.options
+          : (field.type === 'yesno' ? ['Yes', 'No'] : []);
+
+        choices.forEach(value => addOption(input, value, value));
+      } else if (['textarea', 'longtext'].includes(field.type)) {
+        input = document.createElement('textarea');
+      } else {
+        input = document.createElement('input');
+        input.type = ['number', 'tel', 'date', 'email'].includes(field.type)
+          ? field.type : 'text';
+      }
+
+      input.id = 'f_' + field.id;
+      input.dataset.fieldId = field.id;
+      input.dataset.fieldType = field.type;
+      input.required = !!field.required;
+
+      wrap.appendChild(input);
+      grid.appendChild(wrap);
+    });
+
+    card.appendChild(grid);
+    host.appendChild(card);
+  });
+}
+
+function addOption(select, value, text) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = text;
+  select.appendChild(option);
+}
+
+function captureGps() {
+  if (!navigator.geolocation) {
+    setStatus('This browser does not support GPS capture.', 'error');
+    return;
+  }
+
+  setStatus('Requesting GPS location…');
+
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      $('lat').value = position.coords.latitude;
+      $('lng').value = position.coords.longitude;
+      $('gpsAccuracy').textContent =
+        'Accuracy: approximately ' + Math.round(position.coords.accuracy) + ' metres';
+      setStatus('GPS captured. Review the accuracy before saving.', 'ok');
+    },
+    error => setStatus('Could not capture GPS: ' + error.message, 'error'),
+    { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
+  );
+}
+
+function readFormValues() {
+  const custom = {};
+
+  document.querySelectorAll('#dynamicFields [data-field-id]').forEach(el => {
+    custom[el.dataset.fieldId] = el.value.trim();
+  });
+
+  const get = id => custom[id] || '';
+  const grade5 = get('grade5');
+  const grade6 = get('grade6');
+  const grade7 = get('grade7');
+
+  const total = [grade5, grade6, grade7].reduce(
+    (sum, value) => sum + (value === '' ? 0 : (Number(value) || 0)), 0
+  );
+
+  const coreIds = [
+    'educator', 'grade5', 'grade6', 'grade7',
+    'principal', 'principal_contact', 'teacher',
+    'teacher_contact', 'other_details'
+  ];
+
+  const extras = {};
+  Object.keys(custom).forEach(key => {
+    if (!coreIds.includes(key)) extras[key] = custom[key];
+  });
+
+  return {
+    park: $('park').value,
+    district: $('district').value,
+    taluka: $('taluka').value,
+    village: $('village').value,
+    school_name: $('school_name').value.trim(),
+    grade5, grade6, grade7, total,
+    lat: $('lat').value === '' ? '' : Number($('lat').value),
+    lng: $('lng').value === '' ? '' : Number($('lng').value),
+    principal: get('principal'),
+    principal_contact: get('principal_contact'),
+    teacher: get('teacher'),
+    teacher_contact: get('teacher_contact'),
+    educator: get('educator'),
+    other_details: get('other_details'),
+    custom: extras
+  };
+}
+
+async function saveRecce(event) {
+  event.preventDefault();
+  await idbReady();
+
+  const values = readFormValues();
+
+  if (!values.park || !values.district || !values.taluka ||
+      !values.village || !values.school_name) {
+    setStatus('Complete Park, District, Taluka, Village and School Name.', 'error');
+    return;
+  }
+
+  const id = 'REC-' + Date.now() + '-' +
+    Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  const entry = {
+    id,
+    createdAt: new Date().toISOString(),
+    values,
+    status: 'pending',
+    sheetId: normalizeSheetId(destinationSheet ||
+      localStorage.getItem('ws_sheet_url') || ''),
+    backendUrl: backendUrl || localStorage.getItem('ws_backend_url') || ''
+  };
+
+  try {
+    await putEntry(entry);
+    setStatus('Recce saved on this device. Record ID: ' + id, 'ok');
+    resetRecceForm();
+  } catch (error) {
+    setStatus('Could not save locally: ' + error.message, 'error');
+  }
+}
+
+function resetRecceForm() {
+  $('recceForm').reset();
+  $('lat').value = '';
+  $('lng').value = '';
+  $('gpsAccuracy').textContent = 'GPS not captured';
+  renderLocationFields();
+}
+
+async function renderQueue() {
+  await idbReady();
+
+  const entries = (await allEntries())
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const host = $('queueList');
+  host.innerHTML = '';
+
+  if (!entries.length) {
+    host.textContent = 'No saved recce entries on this device yet.';
+    return;
+  }
+
+  entries.forEach(entry => {
+    const card = document.createElement('div');
+    card.className = 'record';
+
+    const title = document.createElement('strong');
+    title.textContent = entry.values.school_name || '(No school name)';
+    card.appendChild(title);
+
+    const detail = document.createElement('p');
+    detail.className = 'small';
+    detail.textContent = [
+      entry.values.park, entry.values.district,
+      entry.values.taluka, entry.values.village
+    ].join(' · ') + ' — ' + new Date(entry.createdAt).toLocaleString();
+    card.appendChild(detail);
+
+    const status = document.createElement('span');
+    status.className = 'pill';
+    status.textContent = entry.status === 'synced' ? 'Synced' :
+      entry.status === 'syncing' ? 'Syncing' : 'Pending sync';
+    card.appendChild(status);
+
+    host.appendChild(card);
+  });
+}
+
+async function syncEntries() {
+  await idbReady();
+
+  const entries = await allEntries();
+  const pending = entries.filter(e => e.status !== 'synced');
+
+  if (!pending.length) {
+    setStatus('There are no pending entries to sync.', 'ok');
+    return;
+  }
+
+  const sheetInput = $('sheetUrl').value.trim() ||
+    destinationSheet || localStorage.getItem('ws_sheet_url') || '';
+  const scriptInput = $('scriptUrl').value.trim() ||
+    backendUrl || localStorage.getItem('ws_backend_url') || '';
+
+  if (!sheetInput || !scriptInput) {
+    setStatus('Open Setup and enter the destination Sheet and Apps Script URLs.', 'error');
+    showView('setup');
+    return;
+  }
+
+  backendUrl = scriptInput;
+  destinationSheet = sheetInput;
+
+  const groups = {};
+
+  pending.forEach(entry => {
+    const sheetId = entry.sheetId || normalizeSheetId(sheetInput);
+    const endpoint = entry.backendUrl || scriptInput;
+    const key = sheetId + '|' + endpoint;
+
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+  });
+
+  for (const [key, group] of Object.entries(groups)) {
+    const separator = key.indexOf('|');
+    const sheetId = key.slice(0, separator);
+    const endpoint = key.slice(separator + 1);
+    const token = 'SYNC-' + Date.now() + '-' +
+      Math.random().toString(36).slice(2, 8).toUpperCase();
+
+    group.forEach(entry => {
+      entry.status = 'syncing';
+      entry.backendUrl = endpoint;
+      entry.sheetId = sheetId;
+    });
+
+    for (const entry of group) await updateEntry(entry);
+
+    const payload = {
+      action: 'sync',
+      token,
+      sheetId,
+      records: group.map(entry => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+        values: entry.values
+      }))
+    };
+
+    try {
+      const form = $('postForm');
+      form.action = endpoint;
+      $('postPayload').value = JSON.stringify(payload);
+      form.submit();
+
+      setStatus('Sync submitted. Waiting for server confirmation…');
+
+      const result = await waitForStatus(endpoint, sheetId, token);
+
+      if (result.status === 'synced') {
+        for (const entry of group) {
+          entry.status = 'synced';
+          entry.syncedAt = result.updatedAt;
+          await updateEntry(entry);
+        }
+        setStatus('Successfully synced ' + result.count +
+          ' recce record(s) to the destination Sheet.', 'ok');
+      } else {
+        for (const entry of group) {
+          entry.status = 'pending';
+          entry.lastError = result.error || 'Sync failed';
+          await updateEntry(entry);
+        }
+        setStatus('Sync failed: ' + (result.error || 'Unknown error') +
+          '. Entries remain saved locally.', 'error');
+      }
+    } catch (error) {
+      for (const entry of group) {
+        entry.status = 'pending';
+        entry.lastError = error.message;
+        await updateEntry(entry);
+      }
+      setStatus('Could not confirm sync: ' + error.message +
+        '. Entries remain saved locally.', 'error');
+    }
+  }
+
+  await renderQueue();
+}
+
+async function waitForStatus(endpoint, sheetId, token) {
+  const end = Date.now() + 90000;
+
+  while (Date.now() < end) {
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    const previousBackend = backendUrl;
+    const previousSheet = destinationSheet;
+
+    backendUrl = endpoint;
+    destinationSheet = sheetId;
+
+    try {
+      const result = await jsonp('status', { token });
+      if (result.status === 'synced' || result.status === 'failed') {
+        backendUrl = previousBackend;
+        destinationSheet = previousSheet;
+        return result;
+      }
+    } catch (error) {
+      // Continue polling until the timeout.
+    }
+
+    backendUrl = previousBackend;
+    destinationSheet = previousSheet;
+  }
+
+  throw new Error('Timed out waiting for sync confirmation. Check the Sync Log tab.');
+}
+
+function exportPending() {
+  idbReady().then(allEntries).then(entries => {
+    const blob = new Blob([JSON.stringify(entries, null, 2)], {
+      type: 'application/json'
+    });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'wild-shaale-recce-backup-' +
+      new Date().toISOString().slice(0, 10) + '.json';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+}
+
+async function refreshDashboard() {
+  const host = $('dashboardContent');
+  host.textContent = 'Loading dashboard…';
+
+  backendUrl = $('scriptUrl').value.trim() ||
+    backendUrl || localStorage.getItem('ws_backend_url') || '';
+  destinationSheet = $('sheetUrl').value.trim() ||
+    destinationSheet || localStorage.getItem('ws_sheet_url') || '';
+
+  try {
+    const result = await jsonp('dashboard');
+    if (!result.ok) throw new Error(result.error || 'Could not load dashboard');
+
+    host.innerHTML = '';
+
+    const total = document.createElement('h3');
+    total.textContent = 'Total synced recce records: ' + result.total;
+    host.appendChild(total);
+
+    [
+      ['By Park', result.byPark],
+      ['By District', result.byDistrict]
+    ].forEach(([heading, data]) => {
+      const title = document.createElement('h3');
+      title.textContent = heading;
+      host.appendChild(title);
+
+      const list = document.createElement('ul');
+
+      Object.entries(data || {})
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([name, count]) => {
+          const item = document.createElement('li');
+          item.textContent = name + ': ' + count;
+          list.appendChild(item);
+        });
+
+      if (!list.children.length) {
+        const item = document.createElement('li');
+        item.textContent = 'No records yet';
+        list.appendChild(item);
+      }
+
+      host.appendChild(list);
+    });
+
+    const recentTitle = document.createElement('h3');
+    recentTitle.textContent = 'Recent records';
+    host.appendChild(recentTitle);
+
+    (result.records || []).forEach(record => {
+      const item = document.createElement('div');
+      item.className = 'record';
+
+      const title = document.createElement('strong');
+      title.textContent = (record.slNo || '') + ' — ' +
+        (record.school || '(School name missing)');
+      item.appendChild(title);
+
+      const details = document.createElement('p');
+      details.className = 'small';
+      details.textContent = [
+        record.park, record.district, record.taluka, record.village
+      ].filter(Boolean).join(' · ');
+      item.appendChild(details);
+
+      host.appendChild(item);
+    });
+
+    if (!result.records || !result.records.length) {
+      const message = document.createElement('p');
+      message.textContent = 'No synced records found yet.';
+      host.appendChild(message);
+    }
+  } catch (error) {
+    host.textContent = 'Dashboard unavailable: ' + error.message;
+  }
+}
+
+window.addEventListener('online', () => {
+  setStatus('Internet connection detected. Open Saved Entries and sync when ready.', 'ok');
+});
+
+(async function init() {
+  try {
+    await openDb();
+    loadSavedSettings();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+
+    if (backendUrl && destinationSheet) {
+      setStatus('Saved setup found. Refresh configuration online before starting a trip.');
+    } else {
+      setStatus('Welcome. Open Setup while online to connect the destination spreadsheet.');
+    }
+  } catch (error) {
+    setStatus('Local offline storage could not start: ' + error.message, 'error');
+  }
+})();
+</script>
+</body>
+</html>
