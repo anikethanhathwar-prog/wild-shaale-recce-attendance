@@ -1,0 +1,10 @@
+{
+  "name": "Wild Shaale School Recce",
+  "short_name": "WS Recce",
+  "description": "Offline-first school recce data collection",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f4",
+  "theme_color": "#1f5d42",
+  "orientation": "portrait"
+}
